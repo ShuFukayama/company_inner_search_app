@@ -26,8 +26,31 @@ import constants as ct
 ############################################################
 # ブラウザタブの表示文言を設定
 st.set_page_config(
-    page_title=ct.APP_NAME
+    page_title=ct.APP_NAME,
+    layout="wide"  # 画面を広く使用
 )
+
+# CSSを追加して右側のスクロールを制御
+st.markdown("""
+<style>
+    /* チャットコンテナのスタイル */
+    .chat-container {
+        height: 80vh;
+        overflow-y: auto;
+        padding: 1rem;
+    }
+    
+    /* サイドバーの幅を調整 */
+    [data-testid="stSidebar"] {
+        min-width: 30%;
+    }
+    
+    /* メインエリアの余白調整 */
+    .main .block-container {
+        padding-top: 1rem;
+    }
+</style>
+""", unsafe_allow_html=True)
 
 # ログ出力を行うためのロガーの設定
 logger = logging.getLogger(ct.LOGGER_NAME)
@@ -67,18 +90,25 @@ cn.display_initial_ai_message()
 
 
 ############################################################
-# 5. 会話ログの表示
+# 5. チャットコンテナの作成
 ############################################################
-try:
-    # 会話ログの表示
-    cn.display_conversation_log()
-except Exception as e:
-    # エラーログの出力
-    logger.error(f"{ct.CONVERSATION_LOG_ERROR_MESSAGE}\n{e}")
-    # エラーメッセージの画面表示
-    st.error(utils.build_error_message(ct.CONVERSATION_LOG_ERROR_MESSAGE), icon=ct.ERROR_ICON)
-    # 後続の処理を中断
-    st.stop()
+# チャットコンテナ（スクロール可能）
+chat_container = st.container()
+with chat_container:
+    st.markdown('<div class="chat-container">', unsafe_allow_html=True)
+    
+    try:
+        # 会話ログの表示
+        cn.display_conversation_log()
+    except Exception as e:
+        # エラーログの出力
+        logger.error(f"{ct.CONVERSATION_LOG_ERROR_MESSAGE}\n{e}")
+        # エラーメッセージの画面表示
+        st.error(utils.build_error_message(ct.CONVERSATION_LOG_ERROR_MESSAGE), icon=ct.ERROR_ICON)
+        # 後続の処理を中断
+        st.stop()
+    
+    st.markdown('</div>', unsafe_allow_html=True)
 
 
 ############################################################
