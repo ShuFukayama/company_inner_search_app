@@ -110,3 +110,12 @@ NO_DOC_MATCH_MESSAGE = """
 CONVERSATION_LOG_ERROR_MESSAGE = "過去の会話履歴の表示に失敗しました。"
 GET_LLM_RESPONSE_ERROR_MESSAGE = "回答生成に失敗しました。"
 DISP_ANSWER_ERROR_MESSAGE = "回答表示に失敗しました。"
+
+# ==========================================
+# RAG設定系
+# ==========================================
+# 変更日時: 2025-03-30
+# 変更内容: マジックナンバーを定数として一元管理するよう変数化
+RAG_CHUNK_SIZE = 500
+RAG_CHUNK_OVERLAP = 50
+RAG_RETRIEVER_TOP_K = 5
