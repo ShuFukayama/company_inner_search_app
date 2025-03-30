@@ -160,7 +160,11 @@ def display_search_llm_response(llm_response):
             # ページ番号を取得
             main_page_number = llm_response["context"][0].metadata["page"]
             # 「メインドキュメントのファイルパス」と「ページ番号」を表示
-            st.success(f"{main_file_path}", icon=icon)
+            # PDFファイルの場合はページ数も表示（0始まりを1始まりに変換）
+            if main_file_path.lower().endswith('.pdf'):
+                st.success(f"{main_file_path} (ページ: {main_page_number + 1})", icon=icon)
+            else:
+                st.success(f"{main_file_path}", icon=icon)
         else:
             # 「メインドキュメントのファイルパス」を表示
             st.success(f"{main_file_path}", icon=icon)
@@ -216,7 +220,11 @@ def display_search_llm_response(llm_response):
                 # ページ番号が取得できない場合のための分岐処理
                 if "page_number" in sub_choice:
                     # 「サブドキュメントのファイルパス」と「ページ番号」を表示
-                    st.info(f"{sub_choice['source']}", icon=icon)
+                    # PDFファイルの場合はページ数も表示（0始まりを1始まりに変換）
+                    if sub_choice['source'].lower().endswith('.pdf'):
+                        st.info(f"{sub_choice['source']} (ページ: {sub_choice['page_number'] + 1})", icon=icon)
+                    else:
+                        st.info(f"{sub_choice['source']}", icon=icon)
                 else:
                     # 「サブドキュメントのファイルパス」を表示
                     st.info(f"{sub_choice['source']}", icon=icon)
@@ -295,8 +303,11 @@ def display_contact_llm_response(llm_response):
             if "page" in document.metadata:
                 # ページ番号を取得
                 page_number = document.metadata["page"]
-                # 「ファイルパス」と「ページ番号」
-                file_info = f"{file_path}"
+                # PDFファイルの場合はページ数も表示（0始まりを1始まりに変換）
+                if file_path.lower().endswith('.pdf'):
+                    file_info = f"{file_path} (ページ: {page_number + 1})"
+                else:
+                    file_info = f"{file_path}"
             else:
                 # 「ファイルパス」のみ
                 file_info = f"{file_path}"
