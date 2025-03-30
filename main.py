@@ -35,7 +35,7 @@ st.markdown("""
 <style>
     /* チャットコンテナのスタイル */
     .chat-container {
-        height: 80vh;
+        height: 5vh; # 80vhから5vhへ変更
         overflow-y: auto;
         padding: 1rem;
     }
