@@ -111,6 +111,14 @@ def initialize_retriever():
     
     # RAGの参照先となるデータソースの読み込み
     docs_all = load_data_sources()
+    
+    # 社員名簿.csvファイルを特別に処理する
+    employee_docs = process_employee_csv()
+    if employee_docs:
+        # 既存のドキュメントリストから社員名簿.csvに関するドキュメントを削除
+        docs_all = [doc for doc in docs_all if "社員名簿.csv" not in doc.metadata.get("source", "")]
+        # 新しく作成した社員名簿ドキュメントを追加
+        docs_all.extend(employee_docs)
 
     # OSがWindowsの場合、Unicode正規化と、cp932（Windows用の文字コード）で表現できない文字を除去
     for doc in docs_all:
@@ -121,23 +129,148 @@ def initialize_retriever():
     # 埋め込みモデルの用意
     embeddings = OpenAIEmbeddings()
     
-    # チャンク分割用のオブジェクトを作成
+    # 通常のドキュメント用のチャンク分割設定
     text_splitter = CharacterTextSplitter(
         chunk_size=ct.RAG_CHUNK_SIZE,
         chunk_overlap=ct.RAG_CHUNK_OVERLAP,
         separator="\n"
     )
 
-    # チャンク分割を実施
-    splitted_docs = text_splitter.split_documents(docs_all)
+    # 社員名簿以外のドキュメントをチャンク分割
+    normal_docs = [doc for doc in docs_all if not doc.metadata.get("is_employee_list", False)]
+    employee_docs = [doc for doc in docs_all if doc.metadata.get("is_employee_list", False)]
+    
+    # 通常のドキュメントのみチャンク分割
+    splitted_normal_docs = text_splitter.split_documents(normal_docs) if normal_docs else []
+    
+    # 全てのドキュメントを結合（社員名簿はチャンク分割しない）
+    all_docs = splitted_normal_docs + employee_docs
 
     # ベクターストアの作成
-    db = Chroma.from_documents(splitted_docs, embedding=embeddings)
+    db = Chroma.from_documents(all_docs, embedding=embeddings)
 
     # ベクターストアを検索するRetrieverの作成
     # 変更日時: 2025-03-30
     # 変更内容: 関連ドキュメントの数を3から5に変更し、マジックナンバーを定数化
     st.session_state.retriever = db.as_retriever(search_kwargs={"k": ct.RAG_RETRIEVER_TOP_K})
+
+
+def process_employee_csv():
+    """
+    社員名簿.csvファイルを処理し、特別なドキュメントを作成する
+    
+    Returns:
+        社員名簿から作成したドキュメントのリスト
+    """
+    import pandas as pd
+    from langchain.schema import Document
+    
+    csv_path = "data/社員について/社員名簿.csv"
+    if not os.path.exists(csv_path):
+        return []
+    
+    try:
+        # CSVファイルを読み込む
+        df = pd.read_csv(csv_path)
+        
+        # 人事部の社員をフィルタリング
+        hr_employees = df[df['部署'] == '人事部']
+        
+        # 人事部の社員一覧を作成（検索しやすいフォーマット）
+        hr_content = """
+# 人事部の社員一覧
+
+以下は人事部に所属する全ての社員の情報です。
+
+"""
+        for _, row in hr_employees.iterrows():
+            hr_content += f"""
+## {row['氏名（フルネーム）']} ({row['社員ID']})
+- **役職**: {row['役職']}
+- **性別**: {row['性別']}
+- **年齢**: {row['年齢']}
+- **メールアドレス**: {row['メールアドレス']}
+- **従業員区分**: {row['従業員区分']}
+- **入社日**: {row['入社日']}
+- **スキルセット**: {row['スキルセット']}
+- **保有資格**: {row['保有資格']}
+- **学歴**: {row['大学名']} {row['学部・学科']} ({row['卒業年月日']}卒業)
+
+"""
+        
+        # 各部署ごとの社員一覧を作成
+        department_docs = []
+        departments = df['部署'].unique()
+        
+        for dept in departments:
+            dept_employees = df[df['部署'] == dept]
+            dept_content = f"""
+# {dept}の社員一覧
+
+以下は{dept}に所属する全ての社員の情報です。
+
+"""
+            for _, row in dept_employees.iterrows():
+                dept_content += f"""
+## {row['氏名（フルネーム）']} ({row['社員ID']})
+- **役職**: {row['役職']}
+- **性別**: {row['性別']}
+- **年齢**: {row['年齢']}
+- **メールアドレス**: {row['メールアドレス']}
+- **従業員区分**: {row['従業員区分']}
+- **入社日**: {row['入社日']}
+- **スキルセット**: {row['スキルセット']}
+- **保有資格**: {row['保有資格']}
+- **学歴**: {row['大学名']} {row['学部・学科']} ({row['卒業年月日']}卒業)
+
+"""
+            
+            # 部署ごとのドキュメントを作成
+            dept_doc = Document(
+                page_content=dept_content,
+                metadata={
+                    "source": csv_path,
+                    "department": dept,
+                    "is_employee_list": True,
+                    "content_type": "department_list"
+                }
+            )
+            department_docs.append(dept_doc)
+        
+        # 人事部の社員一覧ドキュメントを作成
+        hr_doc = Document(
+            page_content=hr_content,
+            metadata={
+                "source": csv_path,
+                "department": "人事部",
+                "is_employee_list": True,
+                "content_type": "hr_department_list",
+                "description": "人事部の社員一覧情報"
+            }
+        )
+        
+        # 特別なクエリ用のドキュメントを作成
+        query_doc = Document(
+            page_content="""
+人事部の社員一覧:
+このドキュメントには人事部に所属する全ての社員の詳細情報が含まれています。
+「人事部に所属している従業員情報を一覧化して」という質問に対応するためのドキュメントです。
+""",
+            metadata={
+                "source": csv_path,
+                "is_employee_list": True,
+                "content_type": "query_helper",
+                "keywords": "人事部,社員一覧,従業員情報"
+            }
+        )
+        
+        # 全てのドキュメントを結合
+        all_docs = [hr_doc, query_doc] + department_docs
+        return all_docs
+        
+    except Exception as e:
+        print(f"社員名簿の処理中にエラーが発生しました: {e}")
+        return []
 
 
 def initialize_session_state():
@@ -216,10 +349,15 @@ def file_load(path, docs_all):
 
     # 想定していたファイル形式の場合のみ読み込む
     if file_extension in ct.SUPPORTED_EXTENSIONS:
-        # ファイルの拡張子に合ったdata loaderを使ってデータ読み込み
-        loader = ct.SUPPORTED_EXTENSIONS[file_extension](path)
-        docs = loader.load()
-        docs_all.extend(docs)
+        # 社員名簿.csvファイルの場合はprocess_employee_csv関数で処理するためスキップ
+        if path.endswith("社員について/社員名簿.csv"):
+            # 何もしない（process_employee_csv関数で処理される）
+            pass
+        else:
+            # 通常のファイル読み込み処理
+            loader = ct.SUPPORTED_EXTENSIONS[file_extension](path)
+            docs = loader.load()
+            docs_all.extend(docs)
 
 
 def adjust_string(s):
